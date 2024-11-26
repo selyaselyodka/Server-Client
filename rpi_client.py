@@ -60,21 +60,21 @@ def reciever():
             line1.set_data(x_data, y_data1)
             line2.set_data(x_data, y_data2)
             #line3.set_data(x_data, y_data3)
-            ax.set_xlim(max(0, x_data[-1] - 10), x_data[-1] + 1)
+            ax.set_xlim(max(0, x_data[-1] - 10), x_data[-1] + 1) 
             #ax.set_ylim(min(min(y_data1), min(y_data2), min(y_data3)) - 1, max(max(y_data1), max(y_data2), max(y_data3)) + 1) 
             ax.set_ylim(min(min(y_data1), min(y_data2)) - 1, max(max(y_data1), max(y_data2)) + 1)    
             return line1, line2
         ani = FuncAnimation(fig, update, init_func=init, interval=1000, blit=False)
         plt.show()    
         
-
+ 
 
     finally:
-         client_socket.close()
+         client_socket.close() 
 
 def sender():
     while True:
-        message = input("Enter quit to stop")
+        message = input("Enter quit to stop\n")
         if(message.lower()=="quit"):
             client_socket.sendall(message.encode())
             break
