@@ -18,13 +18,27 @@ def process_data_from_server(x):
     return x1,y1
 
 def reciever():
+    
     try:
         start_time = time.time()
         fig, ax = plt.subplots()
         x_data, y_data1, y_data2, y_data3 = [], [], [], []
-        line1, = ax.plot([], [], 'b-', label="Temp 1")
-        line2, = ax.plot([], [], 'r-', label="Temp 2")
         #line3, = ax.plot([], [], 'g-', label="Temp 3")
+        first_data = client_socket.recv(1024).decode('utf-8')
+        first_values = first_data.split(',')
+        first_values.pop()
+        fieldnames = []
+        for v in first_values:
+            pair = v.split(':')
+            key = pair[0]
+            fieldnames.append(key)
+
+        line1, = ax.plot([], [], 'b-', label=fieldnames[0])
+        line2, = ax.plot([], [], 'r-', label=fieldnames[1])
+
+        writer = csv.DictWriter(csvfile,fieldnames=fieldnames)
+        writer.writeheader()
+
 
         ax.set_title("Temperature Plot")
         ax.legend()
@@ -42,20 +56,19 @@ def reciever():
             values = data.split(',')
             values.pop()
 
-            index = 1
             data_dict = {}
             for v in values:
-                key = 'temp '+str(index)
-                data_dict[key] = v
-                index += 1
-
+                pair = v.split(':')
+                key = pair[0]
+                data_dict[key] = pair[1]
             
             #x_temperature,y_humidity = process_data_from_server(data)
             #data_dict = [{'temp':data}]
+
             writer.writerows([data_dict])
             x_data.append(current_time)
-            y_data1.append(float(data_dict['temp 1']))
-            y_data2.append(float(data_dict['temp 2']))
+            y_data1.append(float(data_dict[fieldnames[0]]))
+            y_data2.append(float(data_dict[fieldnames[1]]))
             #y_data3.append(float(data_dict['temp 3']))
             line1.set_data(x_data, y_data1)
             line2.set_data(x_data, y_data2)
@@ -70,13 +83,16 @@ def reciever():
  
 
     finally:
-         client_socket.close() 
+        client_socket.close()
+        quit_message = "quit"
+        client_socket.sendall(quit_message.encode())
 
 def sender():
     while True:
         message = input("Enter quit to stop\n")
         if(message.lower()=="quit"):
             client_socket.sendall(message.encode())
+            client_socket.close()
             break
 
 if __name__ == "__main__":
@@ -87,18 +103,18 @@ if __name__ == "__main__":
 
     file_path = THIS_FOLDER+"/data/"+dt+".csv"
     csvfile = open(file_path, 'w+')
-    fieldnames = ["temp 1","temp 2","temp 3"]
-    writer = csv.DictWriter(csvfile,fieldnames=fieldnames)
-    writer.writeheader()
+    
 
-    receiver_thread = threading.Thread(target=reciever, args=())
+    #receiver_thread = threading.Thread(target=reciever, args=())
     sender_thread = threading.Thread(target=sender, args=())
 
-    receiver_thread.start()
+    #receiver_thread.start()
     sender_thread.start()
 
+    reciever()
+
     sender_thread.join()
-    receiver_thread.join()
+    #receiver_thread.join()
 
     print("Client connection closed.")
 
