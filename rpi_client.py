@@ -33,6 +33,8 @@ def reciever():
             key = pair[0]
             fieldnames.append(key)
 
+        fieldnames.append("Time")
+
         line1, = ax.plot([], [], 'b-', label=fieldnames[0])
         line2, = ax.plot([], [], 'r-', label=fieldnames[1])
 
@@ -61,6 +63,7 @@ def reciever():
                 pair = v.split(':')
                 key = pair[0]
                 data_dict[key] = pair[1]
+                data_dict["Time"] = str(datetime.now().hour)+':'+str(datetime.now().minute)+':'+str(datetime.now().second)
             
             #x_temperature,y_humidity = process_data_from_server(data)
             #data_dict = [{'temp':data}]
