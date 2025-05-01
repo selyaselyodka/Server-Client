@@ -8,3 +8,4 @@
 
 **server_modbus.py** is the WIP server-side transmitter on the Raspberry Pi that reads oneWire values from port 240 (WIP)
 
+Ensure RPI is setup as detailed in RPI Router Setup . pdf
