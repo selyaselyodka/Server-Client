@@ -14,21 +14,6 @@ import csv
 
 from datetime import datetime
 
-def temperature_data(sensor):
-    temperature = sensor.read_register(257, functioncode=3)
-    humidity = sensor.read_register(256, functioncode=3)
-    temperature = temperature/100
-    humidity = humidity/100
-    return {
-            'temperature': temperature,
-            'humidity': humidity
-        }
-
-    #tempString = ""
-    #for val in data:
-        #tempString+=str(val)+"," 
-    #return tempString
-
 if __name__ == "__main__":
 
     sensor = minimalmodbus.Instrument('/dev/ttyUSB0',240) 
@@ -43,7 +28,7 @@ if __name__ == "__main__":
     sensor.close_port_after_each_call = True
 
     while True:
-        my_data = temperature_data(sensor)
+        my_data = accurate_temperature_data(sensor)
         print("Temperature "+str(my_data['temperature']))
         print("Humidity "+str(my_data['humidity']))
         time.sleep(1)
