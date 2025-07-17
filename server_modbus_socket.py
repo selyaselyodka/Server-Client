@@ -16,73 +16,36 @@ from datetime import datetime
 
 
 def temperature_data(sensor):
-    temperature = sensor.read_register(257, functioncode=3)
-    humidity = sensor.read_register(256, functioncode=3)
-    temperature = temperature/100
-    humidity = humidity/100
+    # Subtract 1 from datasheet register addresses due to Modbus 0-based indexing
+    temperature = sensor.read_register(256, functioncode=3)  # 257 - 1
+    humidity = sensor.read_register(255, functioncode=3)     # 256 - 1
+    temperature = temperature / 100
+    humidity = humidity / 100
     return {
-            'temperature': temperature,
-            'humidity': humidity
-        }
-
-    #tempString = ""
-    #for val in data:
-        #tempString+=str(val)+","
-    #return tempString
-
-if __name__ == "__main__":
-
-    sensor = minimalmodbus.Instrument('/dev/ttyUSB0',240)	
-    sensor.serial.baudrate = 9600				# BaudRate
-    sensor.serial.bytesize = 8					# Number of data bits to be requested
-    sensor.serial.parity = minimalmodbus.serial.PARITY_NONE	# Parity Setting here is NONE but can be ODD or EVEN
-    sensor.serial.stopbits = 2					# Number of stop bits
-    sensor.serial.timeout  = 0.5					# Timeout time in seconds
-    sensor.mode = minimalmodbus.MODE_RTU				# Mode to be used (RTU or ascii mode)
-
-
-    sensor.clear_buffers_before_each_transaction = True
-    sensor.close_port_after_each_call = True
-
-    # writer = csv.DictWriter(csvfile,fieldnames=fieldnames)
-    # writer.writeheader()
-    while True:
-        my_data = temperature_data(sensor)
-        print("Temperature "+str(my_data['temperature']))
-        print("Humidity "+str(my_data['humidity']))
-        time.sleep(1)
-        #x_encoded_data = my_data.encode('utf-8')
-        #conn.sendall(x_encoded_data)
-        #print(f'Sent: {my_data}')
-        #values = my_data.split(',')
-        #values.pop()
-    
-    #THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
-    #file_path = THIS_FOLDER+"/data/"+dt+".csv"
-    #csvfile = open(file_path, 'w+')
+        'temperature': temperature,
+        'humidity': humidity
+    }
 
 
 # ===============================
-# Additional functions and logic (leave original loop untouched)
+# Additional functions and logic
 # ===============================
 
 def read_sensor_registers(sensor):
     """
     Reads a full set of sensor registers. Adjust addresses as needed.
+    Addresses are corrected for 0-based Modbus indexing.
     """
     try:
         return {
-            # Float values (32-bit, span 2 registers each)
-            'temperature_celsius': sensor.read_float(257, functioncode=3),
-            'humidity_percent': sensor.read_float(259, functioncode=3),
-
-            # 16-bit integer values
-            'control_mode': sensor.read_register(300, functioncode=3),
-            'status_flag': sensor.read_register(301, functioncode=3),
-            'error_code': sensor.read_register(302, functioncode=3),
-            'raw_temp_adc': sensor.read_register(304, functioncode=3),
-            'raw_humidity_adc': sensor.read_register(305, functioncode=3),
-            'firmware_version': sensor.read_register(400, functioncode=3),
+            'temperature_celsius': sensor.read_float(256, functioncode=3),   # 257 - 1
+            'humidity_percent': sensor.read_float(258, functioncode=3),     # 259 - 1
+            'control_mode': sensor.read_register(299, functioncode=3),      # 300 - 1
+            'status_flag': sensor.read_register(300, functioncode=3),       # 301 - 1
+            'error_code': sensor.read_register(301, functioncode=3),        # 302 - 1
+            'raw_temp_adc': sensor.read_register(303, functioncode=3),      # 304 - 1
+            'raw_humidity_adc': sensor.read_register(304, functioncode=3),  # 305 - 1
+            'firmware_version': sensor.read_register(399, functioncode=3),  # 400 - 1
         }
     except Exception as e:
         print(f"[ERROR] Failed to read full register set: {e}")
@@ -90,11 +53,11 @@ def read_sensor_registers(sensor):
 
 def start_purge(sensor):
     """
-    Sends a command to begin purge/calibration by writing 1 to control register 300.
+    Sends a command to begin purge/calibration by writing 1 to control register.
     """
     try:
         print("[INFO] Sending purge/calibration command...")
-        sensor.write_register(300, 1, functioncode=16)
+        sensor.write_register(299, 1, functioncode=16)  # 300 - 1
     except Exception as e:
         print(f"[ERROR] Could not write to control register: {e}")
 
@@ -105,28 +68,43 @@ def wait_for_completion(sensor):
     print("[INFO] Waiting for purge/calibration to complete...")
     while True:
         try:
-            status = sensor.read_register(301, functioncode=3)
+            status = sensor.read_register(300, functioncode=3)  # 301 - 1
             print(f"[DEBUG] Status = {status}")
             if status == 1:
-                print("[✅ DONE] Purge/calibration finished.")
+                print("[DONE] Purge/calibration finished.")
                 break
         except Exception as e:
             print(f"[ERROR] Reading status register: {e}")
         time.sleep(1)
 
-# === Optional: Trigger purge logic ===
-# Uncomment this block to run a purge/calibration cycle
 
-"""
-# === Start purge or calibration ===
-start_purge(sensor)
+if __name__ == "__main__":
 
-# === Wait until done ===
-wait_for_completion(sensor)
+    sensor = minimalmodbus.Instrument('/dev/ttyUSB0', 240)
+    sensor.serial.baudrate = 9600
+    sensor.serial.bytesize = 8
+    sensor.serial.parity = minimalmodbus.serial.PARITY_NONE
+    sensor.serial.stopbits = 2
+    sensor.serial.timeout = 0.5
+    sensor.mode = minimalmodbus.MODE_RTU
 
-# === Read full sensor register set ===
-print("\n[INFO] Final sensor data after purge:")
-full_data = read_sensor_registers(sensor)
-for key, value in full_data.items():
-    print(f"{key}: {value}")
-"""
+    sensor.clear_buffers_before_each_transaction = True
+    sensor.close_port_after_each_call = True
+
+    # === Optional: Trigger purge or calibration ===
+    # Uncomment below to enable purge mode
+    """
+    start_purge(sensor)
+    wait_for_completion(sensor)
+    full_data = read_sensor_registers(sensor)
+    for key, value in full_data.items():
+        print(f"{key}: {value}")
+    """
+
+    # === Loop to read and print temperature/humidity ===
+    while True:
+        my_data = temperature_data(sensor)
+        print("Temperature " + str(my_data['temperature']))
+        print("Humidity " + str(my_data['humidity']))
+        time.sleep(1)
+
