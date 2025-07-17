@@ -14,22 +14,64 @@ import csv
 
 from datetime import datetime
 
-
 def temperature_data(sensor):
-    # Subtract 1 from datasheet register addresses due to Modbus 0-based indexing
-    temperature = sensor.read_register(256, functioncode=3)  # 257 - 1
-    humidity = sensor.read_register(255, functioncode=3)     # 256 - 1
-    temperature = temperature / 100
-    humidity = humidity / 100
+    temperature = sensor.read_register(257, functioncode=3)
+    humidity = sensor.read_register(256, functioncode=3)
+    temperature = temperature/100
+    humidity = humidity/100
+    return {
+            'temperature': temperature,
+            'humidity': humidity
+        }
+
+    #tempString = ""
+    #for val in data:
+        #tempString+=str(val)+"," 
+    #return tempString
+
+if __name__ == "__main__":
+
+    sensor = minimalmodbus.Instrument('/dev/ttyUSB0',240) 
+    sensor.serial.baudrate = 9600               # BaudRate
+    sensor.serial.bytesize = 8                  # Number of data bits to be requested
+    sensor.serial.parity = minimalmodbus.serial.PARITY_NONE  # Parity Setting here is NONE but can be ODD or EVEN
+    sensor.serial.stopbits = 2                  # Number of stop bits
+    sensor.serial.timeout  = 0.5                # Timeout time in seconds
+    sensor.mode = minimalmodbus.MODE_RTU        # Mode to be used (RTU or ascii mode)
+
+    sensor.clear_buffers_before_each_transaction = True
+    sensor.close_port_after_each_call = True
+
+    while True:
+        my_data = temperature_data(sensor)
+        print("Temperature "+str(my_data['temperature']))
+        print("Humidity "+str(my_data['humidity']))
+        time.sleep(1)
+
+    #THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
+    #file_path = THIS_FOLDER+"/data/"+dt+".csv"
+    #csvfile = open(file_path, 'w+')
+
+
+# =======================================================
+# === Extended Feature: Accurate 32-bit Float Reading ===
+# =======================================================
+# This section is appended separately to respect the request
+# to not change the original temperature_data function or main block
+
+def accurate_temperature_data(sensor):
+    """
+    Reads temperature and humidity as 32-bit float values from the sensor,
+    using correct 0-based register addressing and Vaisala's little-endian word order.
+    """
+    sensor.byteorder = minimalmodbus.BYTEORDER_LITTLE_SWAP  # Ensure correct byte order for Vaisala floats
+    temperature = sensor.read_float(256, functioncode=3, number_of_registers=2)  # 257 - 1
+    humidity = sensor.read_float(258, functioncode=3, number_of_registers=2)     # 259 - 1
     return {
         'temperature': temperature,
         'humidity': humidity
     }
 
-
-# ===============================
-# Additional functions and logic
-# ===============================
 
 def read_sensor_registers(sensor):
     """
@@ -37,6 +79,7 @@ def read_sensor_registers(sensor):
     Addresses are corrected for 0-based Modbus indexing.
     """
     try:
+        sensor.byteorder = minimalmodbus.BYTEORDER_LITTLE_SWAP
         return {
             'temperature_celsius': sensor.read_float(256, functioncode=3),   # 257 - 1
             'humidity_percent': sensor.read_float(258, functioncode=3),     # 259 - 1
@@ -77,34 +120,7 @@ def wait_for_completion(sensor):
             print(f"[ERROR] Reading status register: {e}")
         time.sleep(1)
 
-
-if __name__ == "__main__":
-
-    sensor = minimalmodbus.Instrument('/dev/ttyUSB0', 240)
-    sensor.serial.baudrate = 9600
-    sensor.serial.bytesize = 8
-    sensor.serial.parity = minimalmodbus.serial.PARITY_NONE
-    sensor.serial.stopbits = 2
-    sensor.serial.timeout = 0.5
-    sensor.mode = minimalmodbus.MODE_RTU
-
-    sensor.clear_buffers_before_each_transaction = True
-    sensor.close_port_after_each_call = True
-
-    # === Optional: Trigger purge or calibration ===
-    # Uncomment below to enable purge mode
-    """
-    start_purge(sensor)
-    wait_for_completion(sensor)
-    full_data = read_sensor_registers(sensor)
-    for key, value in full_data.items():
-        print(f"{key}: {value}")
-    """
-
-    # === Loop to read and print temperature/humidity ===
-    while True:
-        my_data = temperature_data(sensor)
-        print("Temperature " + str(my_data['temperature']))
-        print("Humidity " + str(my_data['humidity']))
-        time.sleep(1)
-
+# To use advanced features, uncomment and invoke below in main:
+# start_purge(sensor)
+# wait_for_completion(sensor)
+# print(read_sensor_registers(sensor))
