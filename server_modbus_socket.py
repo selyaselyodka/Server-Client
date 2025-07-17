@@ -1,155 +1,132 @@
-# === Required libraries ===
-import socket                 # Used for WiFi communication (sending/receiving data between devices)
-import numpy as np            # Math library (not used here, but commonly imported)
-import encodings              # Handles text encoding (not used directly)
-import time                   # Used for delays between readings
-import sys                    # System-related tools (not used directly here)
-import errno                  # Helps handle network errors
-import threading              # Allows running multiple things at once (like sending and receiving data)
-import subprocess             # Allows running system commands, like rebooting the Raspberry Pi
-import minimalmodbus          # Library to talk to Modbus sensors over serial communication
-import usb.core               # For accessing USB devices (not used directly here)
+import socket
+import numpy as np
+import encodings
+import time
+import sys
+import errno
+import threading
+import subprocess
+import minimalmodbus
+import usb.core
 
-import os.path                # Helps manage file paths
-import csv                    # Lets us save data to a spreadsheet if needed
-from datetime import datetime # Used for timestamps (like logging when data is recorded)
+import os.path
+import csv
 
-# === Function to read temperature and humidity from the sensor ===
+from datetime import datetime
+
+
 def temperature_data(sensor):
-    # Read temperature and humidity registers from the Modbus sensor
     temperature = sensor.read_register(257, functioncode=3)
     humidity = sensor.read_register(256, functioncode=3)
-
-    # The sensor gives values scaled by 100, so we divide to get actual values
-    temperature = temperature / 100
-    humidity = humidity / 100
-
-    # Return the results as a dictionary (like a labeled container of values)
+    temperature = temperature/100
+    humidity = humidity/100
     return {
-        'temperature': temperature,
-        'humidity': humidity
-    }
+            'temperature': temperature,
+            'humidity': humidity
+        }
 
-    # (Below is old code that returns a string instead of a dictionary — not used here)
-    # tempString = ""
-    # for val in data:
-    #     tempString+=str(val)+","
-    # return tempString
+    #tempString = ""
+    #for val in data:
+        #tempString+=str(val)+","
+    #return tempString
 
-# === Main code starts here ===
 if __name__ == "__main__":
 
-    # Set up the Modbus sensor connected to the USB port (typically /dev/ttyUSB0)
-    # Address 240 refers to the unique ID of the sensor on the Modbus network
-    sensor = minimalmodbus.Instrument('/dev/ttyUSB0', 240)	
+    sensor = minimalmodbus.Instrument('/dev/ttyUSB0',240)	
+    sensor.serial.baudrate = 9600				# BaudRate
+    sensor.serial.bytesize = 8					# Number of data bits to be requested
+    sensor.serial.parity = minimalmodbus.serial.PARITY_NONE	# Parity Setting here is NONE but can be ODD or EVEN
+    sensor.serial.stopbits = 2					# Number of stop bits
+    sensor.serial.timeout  = 0.5					# Timeout time in seconds
+    sensor.mode = minimalmodbus.MODE_RTU				# Mode to be used (RTU or ascii mode)
 
-    # Configure the sensor communication settings
-    sensor.serial.baudrate = 9600               # Speed of communication
-    sensor.serial.bytesize = 8                  # Number of data bits
-    sensor.serial.parity = minimalmodbus.serial.PARITY_NONE  # No parity check
-    sensor.serial.stopbits = 2                  # Number of stop bits
-    sensor.serial.timeout = 0.5                 # Time to wait for sensor to respond
-    sensor.mode = minimalmodbus.MODE_RTU        # Use RTU (binary) Modbus protocol
 
-    # These improve communication stability
     sensor.clear_buffers_before_each_transaction = True
     sensor.close_port_after_each_call = True
 
-    # Repeatedly read data from the sensor and print to the terminal
+    # writer = csv.DictWriter(csvfile,fieldnames=fieldnames)
+    # writer.writeheader()
     while True:
         my_data = temperature_data(sensor)
-        print("Temperature " + str(my_data['temperature']))
-        print("Humidity " + str(my_data['humidity']))
+        print("Temperature "+str(my_data['temperature']))
+        print("Humidity "+str(my_data['humidity']))
         time.sleep(1)
-
-        # (The lines below are examples of sending or saving data — not used now)
-        # x_encoded_data = my_data.encode('utf-8')
-        # conn.sendall(x_encoded_data)
-        # print(f'Sent: {my_data}')
-        # values = my_data.split(',')
-        # values.pop()
-
-    # (The lines below are examples for saving to a CSV file — not used now)
-    # THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
-    # file_path = THIS_FOLDER+"/data/"+dt+".csv"
-    # csvfile = open(file_path, 'w+')
+        #x_encoded_data = my_data.encode('utf-8')
+        #conn.sendall(x_encoded_data)
+        #print(f'Sent: {my_data}')
+        #values = my_data.split(',')
+        #values.pop()
+    
+    #THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
+    #file_path = THIS_FOLDER+"/data/"+dt+".csv"
+    #csvfile = open(file_path, 'w+')
 
 
 # ===============================
-# 🧵 THREAD TO SEND DATA TO LAPTOP
+# Additional functions and logic (leave original loop untouched)
 # ===============================
-def sender(conn, addr):
+
+def read_sensor_registers(sensor):
     """
-    Sends the temperature and humidity readings from the Raspberry Pi to the laptop over WiFi.
-    This runs in a separate thread (background task) so it doesn’t block anything else.
+    Reads a full set of sensor registers. Adjust addresses as needed.
     """
-    print(f"[INFO] Connected to {addr}")
     try:
-        while True:
-            my_data = temperature_data(sensor)  # Read data from sensor
-            # Create a simple string like: "modbus_temp:23.5,modbus_humidity:45.0,"
-            data_string = f"modbus_temp:{my_data['temperature']},modbus_humidity:{my_data['humidity']},"
-            conn.sendall(data_string.encode('utf-8'))  # Send the data over WiFi
-            print(f"[SENT] {data_string}")
-            time.sleep(1)  # Wait one second before sending the next data
-    except (BrokenPipeError, ConnectionResetError):
-        print("[ERROR] Connection lost.")
-    finally:
-        conn.close()  # Close connection when done
+        return {
+            # Float values (32-bit, span 2 registers each)
+            'temperature_celsius': sensor.read_float(257, functioncode=3),
+            'humidity_percent': sensor.read_float(259, functioncode=3),
 
+            # 16-bit integer values
+            'control_mode': sensor.read_register(300, functioncode=3),
+            'status_flag': sensor.read_register(301, functioncode=3),
+            'error_code': sensor.read_register(302, functioncode=3),
+            'raw_temp_adc': sensor.read_register(304, functioncode=3),
+            'raw_humidity_adc': sensor.read_register(305, functioncode=3),
+            'firmware_version': sensor.read_register(400, functioncode=3),
+        }
+    except Exception as e:
+        print(f"[ERROR] Failed to read full register set: {e}")
+        return {}
 
-# ===============================
-# 📥 THREAD TO RECEIVE COMMANDS FROM LAPTOP
-# ===============================
-def receiver(conn):
+def start_purge(sensor):
     """
-    Listens for commands sent by the laptop (e.g., the word 'quit').
-    If 'quit' is received, the Raspberry Pi will reboot.
+    Sends a command to begin purge/calibration by writing 1 to control register 300.
     """
+    try:
+        print("[INFO] Sending purge/calibration command...")
+        sensor.write_register(300, 1, functioncode=16)
+    except Exception as e:
+        print(f"[ERROR] Could not write to control register: {e}")
+
+def wait_for_completion(sensor):
+    """
+    Waits for the sensor to report calibration complete by checking status_flag.
+    """
+    print("[INFO] Waiting for purge/calibration to complete...")
     while True:
         try:
-            data = conn.recv(1024).decode()  # Read up to 1024 bytes
-            if not data:
-                print("[INFO] Client disconnected.")
+            status = sensor.read_register(301, functioncode=3)
+            print(f"[DEBUG] Status = {status}")
+            if status == 1:
+                print("[✅ DONE] Purge/calibration finished.")
                 break
-            if data.strip().lower() == "quit":  # If the message is "quit"
-                print("[INFO] Shutdown command received.")
-                break
-        except Exception:
-            break
-    conn.close()
+        except Exception as e:
+            print(f"[ERROR] Reading status register: {e}")
+        time.sleep(1)
 
-    # Restart the Raspberry Pi (you can change "-r" to "-h" to power off instead)
-    subprocess.call(["shutdown", "-r", "now"])
+# === Optional: Trigger purge logic ===
+# Uncomment this block to run a purge/calibration cycle
 
+"""
+# === Start purge or calibration ===
+start_purge(sensor)
 
-# ===============================
-# 🌐 SETUP SOCKET SERVER
-# ===============================
-print("[START] Socket server launching...")
+# === Wait until done ===
+wait_for_completion(sensor)
 
-# Create a new socket using IPv4 and TCP
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-# Set up the socket to listen on IP address 192.168.4.1 and port 65432
-# This works if the Raspberry Pi is acting as a WiFi hotspot (AP mode)
-s.bind(('192.168.4.1', 65432))
-s.listen(1)  # Allow 1 laptop to connect at a time
-
-# Wait until a laptop connects
-conn, addr = s.accept()
-
-# Start the sender and receiver threads
-# One sends sensor data to the laptop, the other listens for commands like 'quit'
-sender_thread = threading.Thread(target=sender, args=(conn, addr))
-receiver_thread = threading.Thread(target=receiver, args=(conn,))
-
-# Start the background threads
-sender_thread.start()
-receiver_thread.start()
-
-# Wait for both threads to finish before shutting down
-sender_thread.join()
-receiver_thread.join()
-
-print("[EXIT] Server shut down.")
+# === Read full sensor register set ===
+print("\n[INFO] Final sensor data after purge:")
+full_data = read_sensor_registers(sensor)
+for key, value in full_data.items():
+    print(f"{key}: {value}")
+"""
